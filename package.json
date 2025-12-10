@@ -1,0 +1,135 @@
+{
+  "name": "sce-unina",
+  "publisher": "UNINA",
+  "displayName": "SCE-UNINA",
+  "description": "SCE-UNINA extension to upload your exam project to a server.",
+  "version": "1.0.3",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:sce-unina.uploadExam",
+    "onCommand:sce-unina.getExam",
+    "onCommand:sce-unina.configureServerHost"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "SCE Unina",
+      "properties": {
+        "sce-unina.serverUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:5001",
+          "description": "The base URL of the SCE Unina backend server (e.g., http://127.0.0.1:5001)"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "sce-unina.uploadExam",
+        "title": "SCE-UNINA: Upload Exam Project to Server"
+      },
+      {
+        "command": "sce-unina.getExam",
+        "title": "SCE-UNINA: Download Exam Files"
+      },
+      {
+        "command": "sce-unina.configureServerHost",
+        "title": "SCE-UNINA: Configure server host"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "sce-unina.uploadExam",
+          "when": "workspaceFolderCount > 0",
+          "group": "sce-unina@1"
+        },
+        {
+          "command": "sce-unina.getExam",
+          "group": "sce-unina@2"
+        },
+        {
+          "command": "sce-unina.configureServerHost",
+          "group": "sce-unina@3"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "sce-unina.uploadExam",
+          "when": "explorerResourceIsFolder",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "sce-unina.uploadExam",
+          "when": "view == sceUninaView && viewItem == sce-unina.uploadExam",
+          "group": "inline"
+        },
+        {
+          "command": "sce-unina.getExam",
+          "when": "view == sceUninaView && viewItem == sce-unina.getExam",
+          "group": "inline"
+        },
+        {
+          "command": "sce-unina.configureServerHost",
+          "when": "view == sceUninaView && viewItem == sce-unina.configureServerHost",
+          "group": "inline"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sceUninaSidebar",
+          "title": "SCE-UNINA",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "sceUninaSidebar": [
+        {
+          "id": "sceUninaView",
+          "name": "Upload Exam",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "compile-tests": "tsc -p .",
+    "test": "npm run compile-tests && node ./out/test/suite/index.js"
+  },
+  "devDependencies": {
+    "@types/archiver": "^6.0.3",
+    "@types/form-data": "^2.2.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/node-fetch": "^2.6.12",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.25.1",
+    "mocha": "^11.7.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3",
+    "vscode-test": "^1.6.1"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "form-data": "^4.0.3",
+    "node-fetch": "^2.7.0"
+  }
+}
