@@ -6,7 +6,7 @@ import * as os from 'os';
 import archiver from 'archiver';
 import fetch from 'node-fetch';
 import FormData from 'form-data';
-import * as unzipper from 'unzipper';
+import AdmZip from 'adm-zip';
 
 function getFormDataLength(form: FormData): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -41,25 +41,6 @@ function getConfigFilePath(): string {
   }
 }
 
-/*
-export async function getServerUrl(): Promise<string> {
-  const configPath = getConfigFilePath();
-
-  try {
-    const raw = await fs.promises.readFile(configPath, 'utf-8');
-    const parsed = JSON.parse(raw);
-    if (parsed && parsed.serverUrl) {
-      return parsed.serverUrl;
-    }
-  } catch {
-    // file doesn’t exist or parse error → fallback
-  }
-
-  // fallback default
-  return 'http://127.0.0.1:5001';
-}
-*/
-
 export async function getServerUrl(): Promise<string> {
   const configPath = getGlobalConfigPath();
 
@@ -75,18 +56,6 @@ export async function getServerUrl(): Promise<string> {
 
   return 'http://127.0.0.1:5001'; // default fallback
 }
-
-/*
-async function setServerUrl(newUrl: string) {
-  const config = vscode.workspace.getConfiguration();
-  // Update workspace setting if a workspace is open, else user setting
-  if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-    await config.update('sce-unina.serverUrl', newUrl, vscode.ConfigurationTarget.Workspace);
-  } else {
-    await config.update('sce-unina.serverUrl', newUrl, vscode.ConfigurationTarget.Global);
-  }
-}
-*/
 
 function getGlobalConfigPath(): string {
   const baseDir = (() => {
@@ -395,32 +364,39 @@ export function activate(context: vscode.ExtensionContext) {
         const ext = path.extname(filename).toLowerCase();
 
         if (ext === '.zip') {
-          // If zip, extract securely into the selected folder
           try {
-            const directory = await unzipper.Open.buffer(buffer as Buffer);
+            const zip = new AdmZip(buffer as Buffer);
+            const entries = zip.getEntries();
 
-            for (const entry of directory.files) {
-              // Prevent path traversal by removing .. and leading slashes
-              const entryPathRaw = (entry.path || entry.pathName || '') as string;
-              const sanitized = entryPathRaw.replace(/(^[\\/]+)|(^|\\/)\.\.([\\/]|$)/g, '');
+            for (const entry of entries) {
+              const entryPathRaw = (entry.entryName || '') as string;
+
+              // Remove leading slashes/backslashes and normalize the path
+              let sanitized = entryPathRaw.replace(/^[\/]+/, '');
+              sanitized = path.normalize(sanitized);
+
+              // Reject empty entries or traversal attempts
+              if (!sanitized || sanitized === '.') continue;
+              const parts = sanitized.split(path.sep);
+              if (parts.includes('..') || path.isAbsolute(sanitized)) {
+                console.warn(`Skipping suspicious entry (path traversal): ${entryPathRaw}`);
+                continue;
+              }
+
               const targetPath = path.join(saveFolder, sanitized);
 
-              // Ensure extraction stays inside the chosen folder
+              // Extra safety: ensure extraction stays inside saveFolder
               if (!targetPath.startsWith(saveFolder)) {
                 console.warn(`Skipping suspicious entry: ${entryPathRaw}`);
                 continue;
               }
 
-              if (entry.type === 'Directory') {
+              if (entry.isDirectory) {
                 await fs.promises.mkdir(targetPath, { recursive: true });
               } else {
                 await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
-                await new Promise<void>((resolve, reject) => {
-                  (entry as any).stream()
-                    .pipe(fs.createWriteStream(targetPath))
-                    .on('finish', () => resolve())
-                    .on('error', (e: any) => reject(e));
-                });
+                const data: Buffer = entry.getData();
+                await fs.promises.writeFile(targetPath, data);
               }
             }
 
