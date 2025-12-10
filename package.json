@@ -129,6 +129,7 @@
   },
   "dependencies": {
     "archiver": "^7.0.1",
+    "unzipper": "^0.10.11",
     "form-data": "^4.0.3",
     "node-fetch": "^2.7.0"
   }

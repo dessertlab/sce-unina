@@ -6,6 +6,7 @@ import * as os from 'os';
 import archiver from 'archiver';
 import fetch from 'node-fetch';
 import FormData from 'form-data';
+import * as unzipper from 'unzipper';
 
 function getFormDataLength(form: FormData): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -391,10 +392,49 @@ export function activate(context: vscode.ExtensionContext) {
         // Read response as buffer
         const buffer = Buffer.from(await response.arrayBuffer());
 
-        // Write file to disk
-        await fs.promises.writeFile(savePath, buffer);
+        const ext = path.extname(filename).toLowerCase();
 
-        vscode.window.showInformationMessage(`Exam files downloaded successfully to ${savePath}`);
+        if (ext === '.zip') {
+          // If zip, extract securely into the selected folder
+          try {
+            const directory = await unzipper.Open.buffer(buffer as Buffer);
+
+            for (const entry of directory.files) {
+              // Prevent path traversal by removing .. and leading slashes
+              const entryPathRaw = (entry.path || entry.pathName || '') as string;
+              const sanitized = entryPathRaw.replace(/(^[\\/]+)|(^|\\/)\.\.([\\/]|$)/g, '');
+              const targetPath = path.join(saveFolder, sanitized);
+
+              // Ensure extraction stays inside the chosen folder
+              if (!targetPath.startsWith(saveFolder)) {
+                console.warn(`Skipping suspicious entry: ${entryPathRaw}`);
+                continue;
+              }
+
+              if (entry.type === 'Directory') {
+                await fs.promises.mkdir(targetPath, { recursive: true });
+              } else {
+                await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+                await new Promise<void>((resolve, reject) => {
+                  (entry as any).stream()
+                    .pipe(fs.createWriteStream(targetPath))
+                    .on('finish', () => resolve())
+                    .on('error', (e: any) => reject(e));
+                });
+              }
+            }
+
+            vscode.window.showInformationMessage(`Exam ZIP extracted successfully to ${saveFolder}`);
+          } catch (e: any) {
+            // Fallback: if extraction fails, save the raw zip file
+            await fs.promises.writeFile(savePath, buffer);
+            vscode.window.showWarningMessage(`Failed to extract ZIP; saved raw ZIP to ${savePath}: ${e.message}`);
+          }
+        } else {
+          // Write file to disk
+          await fs.promises.writeFile(savePath, buffer);
+          vscode.window.showInformationMessage(`Exam files downloaded successfully to ${savePath}`);
+        }
 
       } catch (err: any) {
         if (err.name === 'AbortError') {
