@@ -156,21 +156,21 @@ class UploadProvider implements vscode.TreeDataProvider<UploadNode> {
   async getChildren(): Promise<UploadNode[]> {
     return [
       new UploadNode(
-        "Upload Exam Project",
+        "CONSEGNA compito",
         "sce-unina.uploadExam",
-        "Click to upload your exam project",
+        "Clicca per consegnare i file relativi al compito richiesto",
         "cloud-upload"
       ),
       new UploadNode(
-        "Download Exam Files",
+        "SCARICA file compito",
         "sce-unina.getExam",
-        "Click to download your exam files",
+        "Clicca per scaricare i file necessari per completare il compito richiesto",
         "cloud-download"
       ),
       new UploadNode(
-        "Configure Server Host",
+        "CONFIGURA macchina docente",
         "sce-unina.configureServerHost",
-        `Current server: ${await getServerUrl()}`,
+        `MACCHINA DOCENTE corrente: ${await getServerUrl()}`,
         "settings-gear"
       )
     ];
@@ -204,10 +204,14 @@ export async function uploadExamProject(
 
   const serverUrl = `${await getServerUrl()}/upload`;
 
-  if (progress) progress.report({ message: "Creating ZIP archive..." });
-  await zipFolder(folderPath, zipPath);
+  if (progress) { 
+      progress.report({ message: "Creating ZIP archive..." });
+      await zipFolder(folderPath, zipPath);
+  }
 
-  if (progress) progress.report({ message: "Sending project to server..." });
+  if (progress) {
+    progress.report({ message: "Sending project to server..." });
+  }
 
   const form = new FormData();
   form.append('file', fs.createReadStream(zipPath), {
@@ -250,7 +254,7 @@ export function activate(context: vscode.ExtensionContext) {
   const uploadExamDisposable = vscode.commands.registerCommand('sce-unina.uploadExam', async (uri?: vscode.Uri) => {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders) {
-      vscode.window.showErrorMessage("No workspace folder is open!");
+      vscode.window.showErrorMessage("Nessuna directory workspace è aperta!");
       return;
     }
 
@@ -258,42 +262,42 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Prompt user for info
     const surname = await vscode.window.showInputBox({
-      prompt: "Enter your surname",
+      prompt: "Inserisci il COGNOME",
       ignoreFocusOut: true,
-      validateInput: text => text.trim() === '' ? 'Surname cannot be empty' : null
+      validateInput: text => text.trim() === '' ? 'Il campo COGNOME non puo\' essere vuoto!!!' : null
     });
     if (!surname) {
-      vscode.window.showWarningMessage("Upload canceled. Surname not provided.");
+      vscode.window.showWarningMessage("UPLOAD annullato. COGNOME non fornita.");
       return;
     }
 
     const name = await vscode.window.showInputBox({
-      prompt: "Enter your name",
+      prompt: "Inserisci il NOME",
       ignoreFocusOut: true,
-      validateInput: text => text.trim() === '' ? 'Name cannot be empty' : null
+      validateInput: text => text.trim() === '' ? 'Il campo NOME non puo\' essere vuoto!!!' : null
     });
     if (!name) {
-      vscode.window.showWarningMessage("Upload canceled. Name not provided.");
+      vscode.window.showWarningMessage("UPLOAD annullato. NOME non fornita.");
       return;
     }
 
     const studentID = await vscode.window.showInputBox({
-      prompt: "Enter your student ID",
+      prompt: "Inserisci la MATRICOLA",
       ignoreFocusOut: true,
-      validateInput: text => text.trim() === '' ? 'Student ID cannot be empty' : null
+      validateInput: text => text.trim() === '' ? 'Il campo MATRICOLA non puo\' essere vuoto!!!' : null
     });
     if (!studentID) {
-      vscode.window.showWarningMessage("Upload canceled. Student ID not provided.");
+      vscode.window.showWarningMessage("UPLOAD annullato. MATRICOLA non fornita.");
       return;
     }
 
     const teacher = await vscode.window.showInputBox({
-      prompt: "Enter your teacher",
+      prompt: "Inserisci il DOCENTE (NOME e COGNOME)",
       ignoreFocusOut: true,
-      validateInput: text => text.trim() === '' ? 'Teacher cannot be empty' : null
+      validateInput: text => text.trim() === '' ? 'Il campo DOCENTE non puo\' essere vuoto!!!' : null
     });
     if (!teacher) {
-      vscode.window.showWarningMessage("Upload canceled. Teacher not provided.");
+      vscode.window.showWarningMessage("UPLOAD annullato. DOCENTE non fornito.");
       return;
     }
 
@@ -306,17 +310,17 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.window.withProgress({
       location: vscode.ProgressLocation.Notification,
-      title: `Uploading exam project to ${await getServerUrl()}...`,
+      title: `Consegna compito a ${await getServerUrl()}...`,
       cancellable: false
     }, async (progress) => {
       try {
         await uploadExamProject(folderPath, safeSurname, safeName, safeStudentID, safeTeacher, progress);
-        vscode.window.showInformationMessage("Project sent successfully!");
+        vscode.window.showInformationMessage("Compito inviato correttamente!!!");
       } catch (err: any) {
         if (err.name === 'AbortError') {
-          vscode.window.showErrorMessage("Request timed out. Please try again and make sure host server URL is correct.");
+          vscode.window.showErrorMessage("La richiesta è scaduta. Riprovare e assicurarsi che l'URL della macchina docente sia corretto.");
         } else {
-          vscode.window.showErrorMessage("Failed to upload exam project: " + err.message);
+          vscode.window.showErrorMessage("Errore. Compito non inviato correttamente: " + err.message);
         }
       }
     });
@@ -326,21 +330,18 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(uploadExamDisposable);
 
   const getExamDisposable = vscode.commands.registerCommand('sce-unina.getExam', async () => {
-    const serverUrl = `${await getServerUrl()}/get_exam`;; // your flask backend endpoint
-  
-
-    console.log("sce-unina.getExam IS INVOKED!!!");
+    const serverUrl = `${await getServerUrl()}/get_exam`; // your flask backend endpoint
 
     // Prompt user to pick a folder to save the PDF
     const folderUri = await vscode.window.showOpenDialog({
       canSelectFolders: true,
       canSelectFiles: false,
       canSelectMany: false,
-      openLabel: "Select folder to save exam files"
+      openLabel: "Selezionare la cartella in cui salvare i file del compito"
     });
   
     if (!folderUri || folderUri.length === 0) {
-      vscode.window.showWarningMessage("Download canceled. No folder selected.");
+      vscode.window.showWarningMessage("Download annullato. Non è stata selezionata alcuna cartella.");
       return;
     }
   
@@ -349,11 +350,11 @@ export function activate(context: vscode.ExtensionContext) {
   
     vscode.window.withProgress({
       location: vscode.ProgressLocation.Notification,
-      title: "Downloading exam files...",
+      title: "Scaricamento dei file del compito...",
       cancellable: false
     }, async (progress) => {
       try {
-        progress.report({ message: `Fetching PDF from ${getServerUrl()}...` });
+        progress.report({ message: `Scaricamento dei file da ${getServerUrl()}...` });
 
         //const response = await fetch(serverUrl);
         const response = await fetchWithTimeout(serverUrl, {}, 30000);
@@ -386,7 +387,7 @@ export function activate(context: vscode.ExtensionContext) {
         console.log(filename);
         console.log(savePath);
         
-        vscode.window.showInformationMessage(`Saving exam files as: ${filename}`);
+        vscode.window.showInformationMessage(`Salvataggio dei file del compito come: ${filename}`);
 
         // Read response as buffer
         const buffer = Buffer.from(await response.arrayBuffer());
@@ -394,13 +395,13 @@ export function activate(context: vscode.ExtensionContext) {
         // Write file to disk
         await fs.promises.writeFile(savePath, buffer);
 
-        vscode.window.showInformationMessage(`Exam files downloaded successfully to ${savePath}`);
+        vscode.window.showInformationMessage(`File del compito correttamente scaricati in ${savePath}`);
 
       } catch (err: any) {
         if (err.name === 'AbortError') {
-          vscode.window.showErrorMessage("Request timed out. Please try again and make sure host server URL is correct.");
+          vscode.window.showErrorMessage("La richiesta è scaduta. Riprovare e assicurarsi che l'URL della macchina docente sia corretto.");
         } else {
-          vscode.window.showErrorMessage("Failed to download exam files: " + err.message);
+          vscode.window.showErrorMessage("Errore. File del compito non scaricati correttamente: " + err.message);
         }
       }
     });
@@ -410,33 +411,31 @@ export function activate(context: vscode.ExtensionContext) {
 
   const configureServerHostDisposable = vscode.commands.registerCommand('sce-unina.configureServerHost', async () => {
 
-    console.log("sce-unina.configureServerHost IS INVOKED!!!");
-
     const currentUrl = await getServerUrl();
     const newUrl = await vscode.window.showInputBox({
-      prompt: "Enter the backend server URL",
+      prompt: "Inserisci l'URL della macchina docente",
       value: currentUrl,
       ignoreFocusOut: true,
       validateInput: (text) => {
         try {
           const url = new URL(text);
           if (!['http:', 'https:'].includes(url.protocol)) {
-            return "URL must start with http:// or https://";
+            return "L'URL deve iniziare con http:// o https://";
           }
           return null;
         } catch {
-          return "Invalid URL format";
+          return "Formato URL invalido";
         }
       }
     });
     if (newUrl) {
       await setServerUrl(newUrl);
-      vscode.window.showInformationMessage(`Server URL set to: ${newUrl}`);
+      vscode.window.showInformationMessage(`URL della macchina docente impostato a: ${newUrl}`);
 
       uploadProvider.refresh(); // <== refresh the tree view here!
       
     } else {
-      vscode.window.showInformationMessage("Server URL configuration canceled.");
+      vscode.window.showInformationMessage("Configurazione dell'URL della macchina docente annullato!");
     }
   });
   
