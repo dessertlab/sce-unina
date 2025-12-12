@@ -6,6 +6,7 @@ import * as os from 'os';
 import archiver from 'archiver';
 import fetch from 'node-fetch';
 import FormData from 'form-data';
+import AdmZip from 'adm-zip';
 
 function getFormDataLength(form: FormData): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -40,25 +41,6 @@ function getConfigFilePath(): string {
   }
 }
 
-/*
-export async function getServerUrl(): Promise<string> {
-  const configPath = getConfigFilePath();
-
-  try {
-    const raw = await fs.promises.readFile(configPath, 'utf-8');
-    const parsed = JSON.parse(raw);
-    if (parsed && parsed.serverUrl) {
-      return parsed.serverUrl;
-    }
-  } catch {
-    // file doesn’t exist or parse error → fallback
-  }
-
-  // fallback default
-  return 'http://127.0.0.1:5001';
-}
-*/
-
 export async function getServerUrl(): Promise<string> {
   const configPath = getGlobalConfigPath();
 
@@ -74,18 +56,6 @@ export async function getServerUrl(): Promise<string> {
 
   return 'http://127.0.0.1:5001'; // default fallback
 }
-
-/*
-async function setServerUrl(newUrl: string) {
-  const config = vscode.workspace.getConfiguration();
-  // Update workspace setting if a workspace is open, else user setting
-  if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-    await config.update('sce-unina.serverUrl', newUrl, vscode.ConfigurationTarget.Workspace);
-  } else {
-    await config.update('sce-unina.serverUrl', newUrl, vscode.ConfigurationTarget.Global);
-  }
-}
-*/
 
 function getGlobalConfigPath(): string {
   const baseDir = (() => {
@@ -392,10 +362,56 @@ export function activate(context: vscode.ExtensionContext) {
         // Read response as buffer
         const buffer = Buffer.from(await response.arrayBuffer());
 
-        // Write file to disk
-        await fs.promises.writeFile(savePath, buffer);
+        const ext = path.extname(filename).toLowerCase();
 
-        vscode.window.showInformationMessage(`File del compito correttamente scaricati in ${savePath}`);
+        if (ext === '.zip') {
+          try {
+            const zip = new AdmZip(buffer as Buffer);
+            const entries = zip.getEntries();
+
+            for (const entry of entries) {
+              const entryPathRaw = (entry.entryName || '') as string;
+
+              // Remove leading slashes/backslashes and normalize the path
+              let sanitized = entryPathRaw.replace(/^[\/]+/, '');
+              sanitized = path.normalize(sanitized);
+
+              // Reject empty entries or traversal attempts
+              if (!sanitized || sanitized === '.') continue;
+              const parts = sanitized.split(path.sep);
+              if (parts.includes('..') || path.isAbsolute(sanitized)) {
+                console.warn(`Skipping suspicious entry (path traversal): ${entryPathRaw}`);
+                continue;
+              }
+
+              const targetPath = path.join(saveFolder, sanitized);
+
+              // Extra safety: ensure extraction stays inside saveFolder
+              if (!targetPath.startsWith(saveFolder)) {
+                console.warn(`Skipping suspicious entry: ${entryPathRaw}`);
+                continue;
+              }
+
+              if (entry.isDirectory) {
+                await fs.promises.mkdir(targetPath, { recursive: true });
+              } else {
+                await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+                const data: Buffer = entry.getData();
+                await fs.promises.writeFile(targetPath, data);
+              }
+            }
+
+            vscode.window.showInformationMessage(`Exam ZIP extracted successfully to ${saveFolder}`);
+          } catch (e: any) {
+            // Fallback: if extraction fails, save the raw zip file
+            await fs.promises.writeFile(savePath, buffer);
+            vscode.window.showWarningMessage(`Failed to extract ZIP; saved raw ZIP to ${savePath}: ${e.message}`);
+          }
+        } else {
+          // Write file to disk
+          await fs.promises.writeFile(savePath, buffer);
+          vscode.window.showInformationMessage(`File del compito correttamente scaricati in ${savePath}`);
+        }
 
       } catch (err: any) {
         if (err.name === 'AbortError') {
