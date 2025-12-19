@@ -23,8 +23,9 @@ Press CTRL+C to quit
 ### Avvio del server di consegna senza l'integrazione in VSCODIUM
 
 ```
-$ cd deus 
+$ cd backend/deus/
 $ python deus_server.py
+Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
 ```
 
-Gli studenti dovranno collegarsi a ``IP_DOCENTE:8000`` per fare l'upload dei file
+Gli studenti dovranno collegarsi a ``IP_DOCENTE:8000`` per fare l'upload dei file.
