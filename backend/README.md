@@ -1,6 +1,6 @@
 # SCE-UNINA backend
 
-### Avvio del server
+### Avvio del server utilizzo dall'estensione VSCODIUM
 
 Il server di backend SCE-UNINA sarà in ascolto sul porto 5001 di default. Aprire un prompt dei comandi e lanciare:
 
@@ -19,3 +19,12 @@ WARNING: This is a development server. Do not use it in a production deployment.
 Press CTRL+C to quit
 ```
 
+
+### Avvio del server di consegna senza l'integrazione in VSCODIUM
+
+```
+$ cd deus 
+$ python deus_server.py
+```
+
+Gli studenti dovranno collegarsi a ``IP_DOCENTE:8000`` per fare l'upload dei file
