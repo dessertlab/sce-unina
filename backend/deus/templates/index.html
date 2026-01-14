@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>SCE-UNINA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dist/css/bootstrap.min.css') }}">
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container mt-5">
+    <div class="card shadow-lg">
+        <div class="card-header bg-primary text-white text-center">
+            <h3>SCE-UNINA – Consegna Esame</h3>
+        </div>
+
+        <div class="card-body">
+
+	    
+{% if submitted %}
+
+    <div class="alert alert-success text-center">
+        <h4 class="mb-2">✔ Consegna effettuata con successo!</h4>
+        <p>La tua consegna è stata acquisita correttamente.</p>
+    </div>
+
+    <div class="accordion" id="filesAccordion">
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#filesCollapse">
+                    Visualizza file consegnati
+                </button>
+            </h2>
+            <div id="filesCollapse" class="accordion-collapse collapse">
+                <div class="accordion-body">
+                    <ul class="list-group">
+                        {% for file in uploaded_files %}
+                            <li class="list-group-item">
+                                {{ file }}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% else %}
+
+          
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endwith %}
+
+            <form method="POST" enctype="multipart/form-data">
+                <div class="row mb-3">
+                    <div class="col">
+                        <input class="form-control" name="nome" placeholder="Nome" required>
+                    </div>
+                    <div class="col">
+                        <input class="form-control" name="cognome" placeholder="Cognome" required>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col">
+                        <input class="form-control" name="matricola" placeholder="Matricola" required>
+                    </div>
+                    <div class="col">
+                        <input class="form-control" name="docente" placeholder="Docente" required>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">File sorgenti</label>
+                    <!--
+                    <div class="drop-zone">
+                        <span class="drop-zone__prompt">Trascina qui i file oppure clicca</span>
+                        <input type="file" name="files" multiple class="drop-zone__input" required>
+                    </div>
+                    -->
+		<div class="drop-zone">
+		    <div class="drop-zone__prompt">
+			Trascina qui i file oppure clicca
+		    </div>
+
+		    <div class="drop-zone__files"></div>
+
+		    <input type="file"
+			   class="drop-zone__input"
+			   name="files"
+			   multiple>
+		</div>
+
+                    <small class="text-muted">
+                        Estensioni supportate: .py, .java, .c, .cpp, .h, Makefile, .m
+                    </small>
+                </div>
+
+                <button class="btn btn-success w-100">Invia Consegna</button>
+            </form>
+
+{% endif %}
+        </div>
+
+
+    </div>
+</div>
+
+<script>
+    const ICON_BASE_PATH = "{{ url_for('static', filename='icons/') }}";
+</script>
+
+<script src="{{ url_for('static', filename='dist/js/bootstrap.bundle.min.js') }}"></script>
+
+<script>
+
+<!-- icons from https://github.com/material-extensions/vscode-material-icon-theme/tree/main/icons -->
+
+const EXT_ICONS = {
+    py: "py.svg",
+    java: "java.svg",
+    c: "c.svg",
+    cpp: "cpp.svg",
+    m: "m.svg",
+    h: "h.svg",
+    makefile: "makefile.svg"
+};
+
+document.querySelectorAll(".drop-zone__input").forEach(input => {
+    const dropZone = input.closest(".drop-zone");
+    const prompt = dropZone.querySelector(".drop-zone__prompt");
+    const fileList = dropZone.querySelector(".drop-zone__files");
+
+    let selectedFiles = [];
+
+    function syncInputFiles() {
+        const dt = new DataTransfer();
+        selectedFiles.forEach(f => dt.items.add(f));
+        input.files = dt.files;
+    }
+
+    function renderFiles() {
+        fileList.innerHTML = "";
+        prompt.style.display = selectedFiles.length ? "none" : "block";
+	prompt.style.opacity = selectedFiles.length ? "0.3" : "1";
+
+
+        selectedFiles.forEach((file, index) => {
+            const ext = file.name.split(".").pop().toLowerCase();
+	
+            const iconFile = EXT_ICONS[ext] || "default.svg";
+            const iconPath = ICON_BASE_PATH + iconFile;
+
+
+            const item = document.createElement("div");
+            item.className = "file-item";
+
+		item.innerHTML = `
+		    <div class="file-left">
+			<span class="file-icon">
+			    <img src="${iconPath}" alt="${ext}">
+			</span>
+			<span class="file-name">${file.name}</span>
+			<span class="file-size">${(file.size / 1024).toFixed(1)} KB</span>
+		    </div>
+		    <button class="file-remove" title="Rimuovi file">✖</button>
+		`;
+
+            item.querySelector(".file-remove").onclick = () => {
+                selectedFiles.splice(index, 1);
+                syncInputFiles();
+                renderFiles();
+            };
+
+            fileList.appendChild(item);
+        });
+    }
+
+    function addFiles(files) {
+        for (const file of files) {
+            console.log(file)
+            const ext = "." + file.name.split(".").pop().toLowerCase();
+            console.log(ext)
+            if (![".py", ".java", ".c", ".cpp", ".m", ".h", ".makefile"].includes(ext)) {
+                alert(`Estensione non supportata: ${file.name}`);
+                continue;
+            }
+
+            if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+                selectedFiles.push(file);
+            }
+        }
+
+        syncInputFiles();
+        renderFiles();
+    }
+
+    dropZone.addEventListener("click", () => input.click());
+
+    input.addEventListener("change", () => {
+        addFiles(input.files);
+    });
+
+    dropZone.addEventListener("dragover", e => {
+        e.preventDefault();
+        dropZone.classList.add("drop-zone--over");
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+        dropZone.classList.remove("drop-zone--over");
+    });
+
+    dropZone.addEventListener("drop", e => {
+        e.preventDefault();
+        dropZone.classList.remove("drop-zone--over");
+        addFiles(e.dataTransfer.files);
+    });
+});
+</script>
+
+
+</body>
+</html>
+
