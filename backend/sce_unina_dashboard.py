@@ -8,53 +8,62 @@ app = Flask(__name__)
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-@app.route('/uploads/<filename>')
-def download_file(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
+@app.route('/uploads/<path:filepath>')
+def download_file(filepath):
+    return send_from_directory(UPLOAD_FOLDER, filepath, as_attachment=True)
 
 
 @app.route('/dashboard')
 def dashboard():
-    # Sorting parameters
     sort_by = request.args.get('sort', 'timestamp')
     order = request.args.get('order', 'desc')
 
-    files = [
-        f for f in os.listdir(UPLOAD_FOLDER)
-        if f.endswith('.zip') and os.path.isfile(os.path.join(UPLOAD_FOLDER, f))
-    ]
-
     records = []
-    for filename in files:
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
-        stat = os.stat(file_path)
-        timestamp = datetime.datetime.fromtimestamp(stat.st_mtime)
 
-        base = filename[:-4]
-        parts = base.split('_')
-        if len(parts) < 4:
+    for teacher in os.listdir(UPLOAD_FOLDER):
+        teacher_path = os.path.join(UPLOAD_FOLDER, teacher)
+
+        if not os.path.isdir(teacher_path):
             continue
 
-        surname = parts[0]
-        name = parts[1]
-        student_id = parts[2]
-        teacher = '_'.join(parts[3:])
+        for filename in os.listdir(teacher_path):
+            if not filename.endswith('.zip'):
+                continue
 
-        records.append({
-            'timestamp': timestamp,
-            'surname': surname,
-            'name': name,
-            'student_id': student_id,
-            'teacher': teacher,
-            'filename': filename
-        })
+            file_path = os.path.join(teacher_path, filename)
+            if not os.path.isfile(file_path):
+                continue
 
-    # Sort
+            stat = os.stat(file_path)
+            timestamp = datetime.datetime.fromtimestamp(stat.st_mtime)
+
+            base = filename[:-4]
+            parts = base.split('_')
+            if len(parts) < 3:
+                continue
+
+            surname = parts[0]
+            name = parts[1]
+            student_id = parts[2]
+
+            records.append({
+                'timestamp': timestamp,
+                'surname': surname,
+                'name': name,
+                'student_id': student_id,
+                'teacher': teacher,
+                'filename': filename,
+                'download_path': f"{teacher}/{filename}"
+            })
+
     reverse = (order == 'desc')
     try:
-        records.sort(key=lambda x: x[sort_by].lower() if isinstance(x[sort_by], str) else x[sort_by], reverse=reverse)
+        records.sort(
+            key=lambda x: x[sort_by].lower() if isinstance(x[sort_by], str) else x[sort_by],
+            reverse=reverse
+        )
     except KeyError:
-        pass  # fallback to default if sort_by invalid
+        pass
 
     def sort_url(field):
         new_order = 'asc' if (sort_by != field or order == 'desc') else 'desc'
@@ -100,7 +109,7 @@ def dashboard():
               <td>{{ r.name }}</td>
               <td>{{ r.student_id }}</td>
               <td>{{ r.teacher }}</td>
-              <td><a href="/uploads/{{ r.filename }}" class="btn btn-sm btn-primary" download>Download</a></td>
+              <td><a href="/uploads/{{ r.download_path }}" class="btn btn-sm btn-primary" download>Download</a></td>
             </tr>
             {% endfor %}
           </tbody>
@@ -113,7 +122,14 @@ def dashboard():
     </html>
     """
 
-    return render_template_string(html, records=records, sort_by=sort_by, order=order, sort_url=sort_url)
+    return render_template_string(
+        html,
+        records=records,
+        sort_by=sort_by,
+        order=order,
+        sort_url=sort_url
+    )
+
 
 if __name__ == '__main__':
 
