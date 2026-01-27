@@ -93,11 +93,18 @@
       ]
     },
     "views": {
-      "sceUninaSidebar": [
+    "sceUninaSidebar": [
+      {
+          "id": "sceUninaExamsView",
+          "name": "Esame"
+        },
         {
-          "id": "sceUninaView",
-          "name": "Upload Exam",
-          "icon": "resources/icon.svg"
+          "id": "sceUninaConnectionsView",
+          "name": "Connessione"
+        },
+        {
+          "id": "sceUninaHelpView",
+          "name": "Help"
         }
       ]
     }

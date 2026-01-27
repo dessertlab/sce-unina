@@ -2,3 +2,6 @@ out/
 node_modules/
 package-lock.json
 **/.DS_Store
+backend/deus/uploads
+backend/uploads
+backend/deus/download/

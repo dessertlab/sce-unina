@@ -8,6 +8,7 @@ declare module 'adm-zip' {
   class AdmZip {
     constructor(input?: Buffer | string);
     getEntries(): IZipEntry[];
+    extractAllTo(targetPath: string, overwrite?: boolean): void;
   }
 
   export default AdmZip;
