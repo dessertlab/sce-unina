@@ -3,7 +3,7 @@
   "publisher": "UNINA",
   "displayName": "SCE-UNINA",
   "description": "SCE-UNINA extension to upload your exam project to a server.",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "icon": "icon.png",
   "engines": {
     "vscode": "^1.80.0"
