@@ -8,6 +8,11 @@ import fetch from 'node-fetch';
 import FormData from 'form-data';
 import AdmZip from 'adm-zip';
 
+
+function getExtensionVersion(context: vscode.ExtensionContext): string {
+  return context.extension.packageJSON.version;
+}
+
 function getFormDataLength(form: FormData): Promise<number> {
   return new Promise((resolve, reject) => {
     form.getLength((err, length) => {
@@ -216,9 +221,21 @@ export async function uploadExamProject(
 
 export function activate(context: vscode.ExtensionContext) {
 
+  // get current version of extension
+  const version = getExtensionVersion(context);
+  
   // Register the TreeDataProvider for the sidebar view
   const uploadProvider = new UploadProvider();
-  vscode.window.registerTreeDataProvider('sceUninaView', uploadProvider);
+  //vscode.window.registerTreeDataProvider('sceUninaView', uploadProvider);
+
+  const treeView = vscode.window.createTreeView('sceUninaView', {
+    treeDataProvider: uploadProvider
+  });
+
+  //add version to the title
+  treeView.title = `SCE-UNINA v${version}`;
+
+  context.subscriptions.push(treeView);
 
   // Register the upload command
   const uploadExamDisposable = vscode.commands.registerCommand('sce-unina.uploadExam', async (uri?: vscode.Uri) => {
@@ -262,7 +279,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     const teacher = await vscode.window.showInputBox({
-      prompt: "Inserisci il DOCENTE (NOME e COGNOME)",
+      prompt: "Inserisci il COGNOME del DOCENTE",
       ignoreFocusOut: true,
       validateInput: text => text.trim() === '' ? 'Il campo DOCENTE non puo\' essere vuoto!!!' : null
     });

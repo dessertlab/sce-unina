@@ -1,13 +1,16 @@
 import os
 import zipfile
 import tempfile
-from flask import Flask, render_template, request, redirect, flash, session
+from flask import Flask, render_template, request, redirect, flash, session, send_from_directory, abort
 from werkzeug.utils import secure_filename
 
 ALLOWED_EXTENSIONS = {".py", ".java", ".c", ".cpp", ".m", ".h", ".makefile"}
 
 app = Flask(__name__)
 app.secret_key = "sce-unina-secret-key"
+
+DOWNLOAD_DIR = os.path.join(os.getcwd(), "download")
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 def allowed_file(filename):
     return os.path.splitext(filename)[1].lower() in ALLOWED_EXTENSIONS
@@ -63,6 +66,21 @@ def index():
     	submitted=session.get("submitted", False),
     	uploaded_files=session.get("uploaded_files", [])
     )
+
+@app.route("/download/<path:filename>")
+def download_file(filename):
+
+    file_path = os.path.join(DOWNLOAD_DIR, filename)
+
+    if not os.path.isfile(file_path):
+        abort(404)
+
+    return send_from_directory(
+        DOWNLOAD_DIR,
+        filename,
+        as_attachment=True
+    )
+
 
 if __name__ == "__main__":
     import argparse
