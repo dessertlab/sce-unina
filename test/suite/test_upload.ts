@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import * as assert from 'assert';
-import { uploadExamProject } from '../../extension'; // adjust if necessary
+import { uploadExamProject } from '../src/extension'; // adjust if necessary
 
 console.log("test_upload.ts invoked...");
 
