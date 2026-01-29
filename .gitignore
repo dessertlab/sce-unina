@@ -4,4 +4,5 @@ package-lock.json
 **/.DS_Store
 backend/deus/uploads
 backend/uploads
+backend/download
 backend/deus/download/

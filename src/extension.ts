@@ -12,10 +12,6 @@ let isConnected = false;
 
 /* -------------------- Utils -------------------- */
 
-function getExtensionVersion(context: vscode.ExtensionContext): string {
-  return context.extension.packageJSON.version;
-}
-
 function getGlobalConfigPath(): string {
   const platform = process.platform;
   if (platform === 'win32') {
@@ -59,16 +55,54 @@ function getFormDataLength(form: FormData): Promise<number> {
   });
 }
 
-function zipFolder(source: string, out: string): Promise<void> {
+function zipFolder(source: string, out: string, rootFolderName: string): Promise<void> {
   const archive = archiver('zip', { zlib: { level: 9 } });
   const stream = fs.createWriteStream(out);
 
   return new Promise((resolve, reject) => {
-    archive.directory(source, false).on('error', reject).pipe(stream);
+    // Put everything inside rootFolderName/
+    archive.directory(source, rootFolderName)
+      .on('error', reject)
+      .pipe(stream);
+
     stream.on('close', () => resolve());
     archive.finalize();
   });
 }
+
+async function extractZipDirectly(buffer: Buffer, destination: string) {
+  const zip = new AdmZip(buffer);
+  const entries = zip.getEntries();
+
+  // Determine the top-level folder name (skip __MACOSX)
+  const topLevelFolders = entries
+    .map(e => e.entryName.split(/\/|\\/)[0])
+    .filter(name => name && name !== '__MACOSX');
+
+  // Pick the most common top-level folder
+  const topFolder = topLevelFolders[0]; // assume first one
+
+  for (const entry of entries) {
+    if (entry.isDirectory) continue; // skip directories
+    if (entry.entryName.startsWith('__MACOSX')) continue; // skip macOS metadata
+
+    // Remove the top-level folder
+    const relativePath = entry.entryName.startsWith(topFolder + '/')
+      ? entry.entryName.substring(topFolder.length + 1)
+      : entry.entryName;
+
+    if (!relativePath) continue; // skip empty names
+
+    const targetPath = path.join(destination, relativePath);
+
+    // Ensure parent dir exists
+    await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+
+    // Write the file
+    await fs.promises.writeFile(targetPath, entry.getData());
+  }
+}
+
 
 /* -------------------- Tree Items -------------------- */
 
@@ -118,13 +152,14 @@ class ExamsProvider implements vscode.TreeDataProvider<ActionNode> {
 
 async function checkServerConnection(): Promise<boolean> {
   try {
-    const url = `${await getServerUrl()}/get_exam`;
+    const url = `${await getServerUrl()}/list_exams`;
     const res = await fetchWithTimeout(url, {}, 5000);
     return res.ok;
   } catch {
     return false;
   }
 }
+
 
 
 class ConnectionsProvider implements vscode.TreeDataProvider<ActionNode> {
@@ -206,7 +241,10 @@ async function uploadExamProject(folderPath: string, surname: string, name: stri
   const serverUrl = `${await getServerUrl()}/upload`;
 
   progress?.report({ message: "Creazione archivio ZIP..." });
-  await zipFolder(folderPath, zipPath);
+  //await zipFolder(folderPath, zipPath);
+  const baseName = path.basename(zipFileName, ".zip");
+
+  await zipFolder(folderPath, zipPath, baseName);
 
   const form = new FormData();
   form.append('file', fs.createReadStream(zipPath), { filename: zipFileName });
@@ -244,12 +282,42 @@ export function activate(context: vscode.ExtensionContext) {
 
     const folderPath = workspaceFolders[0].uri.fsPath;
 
-    const surname = await vscode.window.showInputBox({ prompt: "COGNOME" });
-    const name = await vscode.window.showInputBox({ prompt: "NOME" });
-    const studentID = await vscode.window.showInputBox({ prompt: "MATRICOLA" });
-    const teacher = await vscode.window.showInputBox({ prompt: "DOCENTE" });
+    // Helper to validate input
+    const notEmpty = (fieldName: string) => (value: string | undefined) => {
+      if (!value || !value.trim()) {
+        return `Il campo ${fieldName} non può essere vuoto!`;
+      }
+      return null; // valid
+    };
 
-    if (!surname || !name || !studentID || !teacher) return;
+    // Prompt user for all fields with validation
+    const surname = await vscode.window.showInputBox({
+      prompt: "COGNOME",
+      ignoreFocusOut: true,
+      validateInput: notEmpty("COGNOME")
+    });
+    if (!surname) return; // user cancelled
+
+    const name = await vscode.window.showInputBox({
+      prompt: "NOME",
+      ignoreFocusOut: true,
+      validateInput: notEmpty("NOME")
+    });
+    if (!name) return;
+
+    const studentID = await vscode.window.showInputBox({
+      prompt: "MATRICOLA",
+      ignoreFocusOut: true,
+      validateInput: notEmpty("MATRICOLA")
+    });
+    if (!studentID) return;
+
+    const teacher = await vscode.window.showInputBox({
+      prompt: "DOCENTE",
+      ignoreFocusOut: true,
+      validateInput: notEmpty("DOCENTE")
+    });
+    if (!teacher) return;
 
     const safe = (s: string) => s.trim().replace(/[^a-zA-Z0-9 _-]/g, '').toUpperCase();
 
@@ -263,45 +331,94 @@ export function activate(context: vscode.ExtensionContext) {
     });
   }));
 
-  /* ---------- Download Command ---------- */
+  
+
+  /* ---------- Download Command (with dropdown list) ---------- */
 
   context.subscriptions.push(vscode.commands.registerCommand('sce-unina.getExam', async () => {
 
-    const serverUrl = `${await getServerUrl()}/get_exam`;
+    const baseUrl = await getServerUrl();
 
-    const folderUri = await vscode.window.showOpenDialog({ canSelectFolders: true });
-    if (!folderUri) return;
+    try {
+      // 1. Ask server for available exams
+      const listResponse = await fetchWithTimeout(`${baseUrl}/list_exams`, {}, 5000);
 
-    const saveFolder = folderUri[0].fsPath;
-
-    vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "Download..." }, async progress => {
-
-      const response = await fetchWithTimeout(serverUrl, {}, 30000);
-      if (!response.ok) return vscode.window.showErrorMessage("Errore server");
-
-      const buffer = Buffer.from(await response.arrayBuffer());
-
-      let filename = "exam_download.pdf";
-      const cd = response.headers.get('content-disposition');
-      if (cd) {
-        const match = /filename="?([^"]+)"?/.exec(cd);
-        if (match) filename = match[1];
+      if (!listResponse.ok) {
+        return vscode.window.showErrorMessage("Errore nel recupero lista file dal server.");
       }
 
-      const savePath = path.join(saveFolder, filename);
-      const ext = path.extname(filename).toLowerCase();
+      const files: string[] = await listResponse.json();
 
-      if (ext === '.zip') {
-        const zip = new AdmZip(buffer);
-        zip.extractAllTo(saveFolder, true);
-      } else {
-        await fs.promises.writeFile(savePath, buffer);
+      if (!files || files.length === 0) {
+        return vscode.window.showWarningMessage("Nessun file di esame disponibile.");
       }
 
-      vscode.window.showInformationMessage("File scaricati!");
-    });
+      // 2. Show dropdown
+      const selectedFile = await vscode.window.showQuickPick(files, {
+        placeHolder: "Seleziona il file di esame da scaricare"
+      });
+
+      if (!selectedFile) {
+        return vscode.window.showInformationMessage("Download annullato.");
+      }
+
+      // 3. Choose destination folder
+      const folderUri = await vscode.window.showOpenDialog({
+        canSelectFolders: true,
+        canSelectFiles: false,
+        canSelectMany: false,
+        openLabel: "Seleziona cartella di destinazione"
+      });
+
+      if (!folderUri) return;
+
+      const saveFolder = folderUri[0].fsPath;
+      const savePath = path.join(saveFolder, selectedFile);
+
+      vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: `Scaricamento ${selectedFile}...` },
+        async () => {
+
+          const response = await fetchWithTimeout(
+            `${baseUrl}/get_exam/${encodeURIComponent(selectedFile)}`,
+            {},
+            30000
+          );
+
+          if (!response.ok) {
+            return vscode.window.showErrorMessage("Errore durante il download del file.");
+          }
+
+          const buffer = Buffer.from(await response.arrayBuffer());
+          const ext = path.extname(selectedFile).toLowerCase();
+
+          if (ext === ".zip") {
+            //const zip = new AdmZip(buffer);
+            await extractZipDirectly(buffer, saveFolder);
+            //zip.extractAllTo(saveFolder, true);
+
+            vscode.window.showInformationMessage(`Archivio estratto in ${saveFolder}`);
+          } else {
+            await fs.promises.writeFile(savePath, buffer);
+            vscode.window.showInformationMessage(`File salvato in ${savePath}`);
+          }
+        }
+      );
+
+      await vscode.commands.executeCommand(
+        'vscode.openFolder',
+        vscode.Uri.file(saveFolder),
+        false   // false = open in same window, true = new window
+      );
+
+      
+
+    } catch (err: any) {
+      vscode.window.showErrorMessage("Errore di connessione al server: " + err.message);
+    }
   }));
 
+  
   /* ---------- Configure Server ---------- */
 
   context.subscriptions.push(vscode.commands.registerCommand('sce-unina.configureServerHost', async () => {
@@ -322,21 +439,28 @@ export function activate(context: vscode.ExtensionContext) {
 
   /* ---------- Connect Server ---------- */
 
-  context.subscriptions.push(vscode.commands.registerCommand('sce-unina.connectServer', async () => {
+  context.subscriptions.push(
+  vscode.commands.registerCommand('sce-unina.connectServer', async () => {
     const url = await getServerUrl();
 
     try {
-      const response = await fetchWithTimeout(`${url}/get_exam`, {}, 5000);
-      if (!response.ok) throw new Error();
+      const response = await fetchWithTimeout(`${url}/list_exams`, {}, 5000);
+
+      if (!response.ok) throw new Error("Server not reachable");
+
+      const files = await response.json();
+      if (!Array.isArray(files)) throw new Error("Invalid response");
+
       isConnected = true;
       vscode.window.showInformationMessage("Connessione riuscita!");
-    } catch {
+    } catch (err) {
       isConnected = false;
       vscode.window.showErrorMessage("Connessione fallita!");
     }
 
     connectionsProvider.refresh();
   }));
+
 }
 
 export function deactivate() {}

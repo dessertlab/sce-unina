@@ -70,57 +70,90 @@ def dashboard():
         return f"/dashboard?sort={field}&order={new_order}"
 
     html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>SCE-UNINA Dashboard</title>
-      <meta http-equiv="refresh" content="5">
-      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-      <style>
-        th a {
-          color: inherit;
-          text-decoration: none;
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SCE-UNINA Dashboard</title>
+    <meta http-equiv="refresh" content="5">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Table headers and links */
+        th a { 
+            color: inherit; 
+            text-decoration: none; 
+            font-size: 1.2rem; /* bigger font */
         }
-        th a:hover {
-          text-decoration: underline;
+        th a:hover { 
+            text-decoration: underline; 
         }
-      </style>
-    </head>
-    <body class="bg-light">
-      <div class="container mt-5">
-        <h1 class="mb-4">Uploaded Exam Projects</h1>
+
+        /* Table body */
+        td { 
+            font-size: 1.1rem; /* slightly bigger font for table data */
+        }
+
+        /* Overall page */
+        body { 
+            font-size: 1.2rem; /* make general text bigger */
+        }
+
+        h1 { 
+            font-size: 2.5rem; /* bigger page title */
+        }
+
+        .table {
+            font-size: 1.2rem; /* ensure table text is bigger */
+        }
+
+        /* Make buttons bigger */
+        .btn {
+            font-size: 1rem;
+            padding: 0.5rem 1rem;
+        }
+
+        /* Table header background and bold text */
+        thead.table-dark th {
+            background-color: #343a40; /* darker header for contrast */
+            color: #fff;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container mt-5">
+        <h1 class="mb-4">Compiti Consegnati</h1>
         {% if records %}
         <table class="table table-striped table-bordered align-middle">
-          <thead class="table-dark">
-            <tr>
-              <th><a href="{{ sort_url('timestamp') }}">Timestamp{% if sort_by == 'timestamp' %} {{ '↑' if order == 'asc' else '↓' }}{% endif %}</a></th>
-              <th><a href="{{ sort_url('surname') }}">Surname{% if sort_by == 'surname' %} {{ '↑' if order == 'asc' else '↓' }}{% endif %}</a></th>
-              <th><a href="{{ sort_url('name') }}">Name{% if sort_by == 'name' %} {{ '↑' if order == 'asc' else '↓' }}{% endif %}</a></th>
-              <th><a href="{{ sort_url('student_id') }}">Student ID{% if sort_by == 'student_id' %} {{ '↑' if order == 'asc' else '↓' }}{% endif %}</a></th>
-              <th><a href="{{ sort_url('teacher') }}">Teacher{% if sort_by == 'teacher' %} {{ '↑' if order == 'asc' else '↓' }}{% endif %}</a></th>
-              <th>Download</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in records %}
-            <tr>
-              <td>{{ r.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-              <td>{{ r.surname }}</td>
-              <td>{{ r.name }}</td>
-              <td>{{ r.student_id }}</td>
-              <td>{{ r.teacher }}</td>
-              <td><a href="/uploads/{{ r.download_path }}" class="btn btn-sm btn-primary" download>Download</a></td>
-            </tr>
-            {% endfor %}
-          </tbody>
+            <thead class="table-dark">
+                <tr>
+                    <th><a href="{{ sort_url('timestamp') }}">Timestamp{% if sort_by == 'timestamp' %} {{ '↑' if order == 'asc' else '↓' }}{% endif %}</a></th>
+                    <th><a href="{{ sort_url('surname') }}">Cognome{% if sort_by == 'surname' %} {{ '↑' if order == 'asc' else '↓' }}{% endif %}</a></th>
+                    <th><a href="{{ sort_url('name') }}">Nome{% if sort_by == 'name' %} {{ '↑' if order == 'asc' else '↓' }}{% endif %}</a></th>
+                    <th><a href="{{ sort_url('student_id') }}">Matricola{% if sort_by == 'student_id' %} {{ '↑' if order == 'asc' else '↓' }}{% endif %}</a></th>
+                    <th><a href="{{ sort_url('teacher') }}">Docente{% if sort_by == 'teacher' %} {{ '↑' if order == 'asc' else '↓' }}{% endif %}</a></th>
+                    <th>Download</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in records %}
+                <tr>
+                    <td>{{ r.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>{{ r.surname }}</td>
+                    <td>{{ r.name }}</td>
+                    <td>{{ r.student_id }}</td>
+                    <td>{{ r.teacher }}</td>
+                    <td><a href="/uploads/{{ r.download_path }}" class="btn btn-sm btn-primary" download>Download</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
         </table>
         {% else %}
-          <p class="text-muted">No ZIP files uploaded yet.</p>
+        <p class="text-muted">Nessun compito ancora consegnato!</p>
         {% endif %}
-      </div>
-    </body>
-    </html>
-    """
+    </div>
+</body>
+</html>
+   """
 
     return render_template_string(
         html,

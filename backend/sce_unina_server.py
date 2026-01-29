@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-from flask import Flask, request, send_file, abort
+from flask import Flask, request, send_file, abort, send_from_directory, jsonify
 import re
 import os
 import argparse
@@ -12,22 +12,16 @@ ALLOWED_EXTENSIONS = {'.pdf', '.doc', '.docx', '.rtf', '.zip'}
 FILE_PATH = ''  # Will be set from argument
 
 UPLOAD_FOLDER = 'uploads'
+DOWNLOAD_DIR = "download"
 
-"""
-@app.route('/upload', methods=['POST'])
-def upload():
-    if 'file' not in request.files:
-        return "No file part in the request", 400
-
-    file = request.files['file']
-    if file.filename == '':
-        return "No selected file", 400
-
-    filename = file.filename
-    file.save(filename)
-
-    return f'Upload received and saved as {filename}', 200
-"""
+@app.route("/list_exams", methods=["GET"])
+def list_exams():
+    try:
+        files = os.listdir(DOWNLOAD_DIR)
+        allowed = [f for f in files if f.lower().endswith((".zip", ".pdf", ".doc", ".docx", ".rtf"))]
+        return jsonify(allowed)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/upload', methods=['POST'])
 def upload():
@@ -89,6 +83,18 @@ def upload():
 
     return f"Upload received and saved as {filename} in channel '{mapped_channel}'. {note}", 200
 
+
+@app.route("/get_exam/<filename>", methods=["GET"])
+def get_exam(filename):
+    if not filename.lower().endswith((".zip", ".pdf", ".doc", ".docx", ".rtf")):
+        abort(400, "Formato non supportato")
+
+    return send_from_directory(
+        DOWNLOAD_DIR,
+        filename,
+        as_attachment=True
+    )
+"""
 @app.route('/get_exam', methods=['GET'])
 def get_exam():
     if not os.path.exists(FILE_PATH):
@@ -115,6 +121,7 @@ def get_exam():
         as_attachment=True,
         download_name=os.path.basename(FILE_PATH)
     )
+"""
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='SCE-Unina Flask Server')

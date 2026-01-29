@@ -125,7 +125,9 @@ vsce package
 
 This generates a `.vsix` file for distribution.
 
----
+### Publish
+
+Use ``ovsx publish`` for VSCodium or ``vsce publish`` for VSCode.
 
 ## 🥪 Testing
 
