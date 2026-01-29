@@ -6,10 +6,9 @@
 
 ## ✨ Features
 
-* ✅ **Upload your exam project** as a `.zip` file to the university server
-* ✅ **Download the exam paper PDF** directly into your workspace
-* ✅ **Configure backend server host** from the sidebar or Command Palette
-* ✅ Sidebar view with tree-style command access
+* ✅ **Upload your exam project files** as a `.zip` file to the university server
+* ✅ **Download the exam project files** directly into student's workspace
+* ✅ **Manage backend server host** from the sidebar or Command Palette
 
 ---
 
@@ -20,7 +19,6 @@
 If you're using VS Code:
 
 ```bash
-vsce package          # Generate .vsix bundle
 code --install-extension sce-unina-0.0.x.vsix
 ```
 
@@ -34,6 +32,8 @@ codium --install-extension sce-unina-0.0.x.vsix
 
 ---
 
+The extension can be also installed by searching it from the list of public extensions.
+
 ### 2. Using the Extension
 
 #### Run the backend Server
@@ -41,59 +41,40 @@ codium --install-extension sce-unina-0.0.x.vsix
 Open a terminal/prompt, go to ``backend`` folder and run the server (``sce_unina_server.py``):
 
 ```
+$ cd sce-unina/backend
 $ python sce_unina_server.py
 ```
 
-By default, ``sce_unina_server`` listening on ``0.0.0.0:5001`` and file name for exam paper is ``traccia.pdf``. Change the server host, port, and file name for exam paper if needed. For example, for server URL ``192.168.3.51:8080`` and file name ``sample_exam.docx``, use the following:
+By default, ``sce_unina_server``is listening on ``0.0.0.0:5001`` and all the exam files should be put under ``backend/download`` dir. 
+Each file under the ``download`` directory can be downloaded by the student. So, you can organize the ``download`` dir with the exam files like in the following:
 
 ```
-python sce_unina_server.py --host 192.168.3.51 --port 8080 --file sample_exam.docx
+teacher1.zip
+teacher2.zip
+...
 ```
 
-Please, be sure to put the exam trace file within the backend folder.
+You can change the default server host and port as follows:
+
+```
+python sce_unina_server.py --host 192.168.3.51 --port 8080
+```
 
 #### Run the VSCodium extension
 
-* Open VSCodium and create a new project for the exam
-* Open the **SCE-UNINA** view from the Activity Bar
-* Click on:
+* Tab **ESAME**:
 
-  * 📤 **Upload Exam Project**, to upload you exam project. Fill up info when requested.
-  * 📥 **Download Exam Paper PDF**, to download the exam paper locally.
+  * 📤 **CONSEGNA compito**, to upload your exam project. Fill up the info when requested.
+  * 📥 **SCARICA file compito**, to download the exam files into the working directory.
 
-* Or use the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) and search for:
+* Tab **CONNESSIONE**:
 
-  * `SCE-UNINA: Upload Exam Project`
-  * `SCE-UNINA: Download Exam Paper PDF`
-
-
----
-
-## ⚙️ Configuration
-
-To set or change the server URL:
-
-1. Open Command Palette and run:
-
-   ```
-   SCE-UNINA: Configure server host
-   ```
-
-2. Enter the server address, e.g.:
+  * **Configura macchina docente** allows students to configure the backend IP address, e.g.:
 
    ```
    http://127.0.0.1:5001
    ```
-
-You can also set this manually in `sce-unina-config.json`:
-
-```json
-{
-  "serverUrl": "http://your-server-address:port"
-}
-```
-
----
+  * **Connetti alla macchina docente** allows students to connect with the backend
 
 ## 💻 Development
 
