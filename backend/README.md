@@ -19,6 +19,7 @@ WARNING: This is a development server. Do not use it in a production deployment.
 Press CTRL+C to quit
 ```
 
+Caricare in una directory con nome ``download`` (nella working directory dove si avvia ``sce_unina_server.py``) tutti i file d'esame che lo studente può scaricare.
 
 ### Avvio del server di consegna senza l'integrazione in VSCODIUM
 
