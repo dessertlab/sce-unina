@@ -6,6 +6,7 @@
 In ogni caso, permette agli studenti di fare l'upload di file d'esame verso la macchina docente.
 
 ```
+## open a terminal on the teacher node and launch the server
 $ cd backend/deus/
 $ python deus_server.py
 Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
