@@ -379,28 +379,28 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Prompt user for all fields with validation
     const surname = await vscode.window.showInputBox({
-      prompt: "COGNOME",
+      prompt: "Inserisci il tuo COGNOME",
       ignoreFocusOut: true,
       validateInput: notEmpty("COGNOME")
     });
     if (!surname) return; // user cancelled
 
     const name = await vscode.window.showInputBox({
-      prompt: "NOME",
+      prompt: "Inserisci il tuo NOME",
       ignoreFocusOut: true,
       validateInput: notEmpty("NOME")
     });
     if (!name) return;
 
     const studentID = await vscode.window.showInputBox({
-      prompt: "MATRICOLA",
+      prompt: "Inserisci la tua MATRICOLA",
       ignoreFocusOut: true,
       validateInput: notEmpty("MATRICOLA")
     });
     if (!studentID) return;
 
     const teacher = await vscode.window.showInputBox({
-      prompt: "DOCENTE",
+      prompt: "Inserisci il COGNOME del DOCENTE",
       ignoreFocusOut: true,
       validateInput: notEmpty("DOCENTE")
     });
