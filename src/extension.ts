@@ -12,6 +12,71 @@ let isConnected = false;
 
 /* -------------------- Utils -------------------- */
 
+async function chooseOrCreateWorkingDirectory(): Promise<string | undefined> {
+  // 1. Choose parent folder
+  const parentUri = await vscode.window.showOpenDialog({
+    canSelectFolders: true,
+    canSelectFiles: false,
+    canSelectMany: false,
+    openLabel: "Seleziona la cartella padre"
+  });
+
+  if (!parentUri || parentUri.length === 0) {
+    return undefined;
+  }
+
+  const parentPath = parentUri[0].fsPath;
+
+  // 2. Ask new folder name
+  const folderName = await vscode.window.showInputBox({
+    prompt: "Nome della nuova cartella di lavoro",
+    placeHolder: "es. Compito_Rossi_12345",
+    ignoreFocusOut: true,
+    validateInput: (value) => {
+      if (!value || !value.trim()) {
+        return "Il nome della cartella non può essere vuoto.";
+      }
+
+      // Windows-invalid chars + a few universally problematic ones
+      if (/[<>:"/\\|?*\x00-\x1F]/.test(value)) {
+        return "Il nome contiene caratteri non validi.";
+      }
+
+      if (value === "." || value === "..") {
+        return "Nome cartella non valido.";
+      }
+
+      return null;
+    }
+  });
+
+  if (!folderName) {
+    return undefined;
+  }
+
+  const workingDir = path.join(parentPath, folderName.trim());
+
+  try {
+    await fs.promises.mkdir(workingDir, { recursive: false });
+  } catch (err: any) {
+    if (err?.code === "EEXIST") {
+      const choice = await vscode.window.showWarningMessage(
+        `La cartella "${folderName}" esiste già. Vuoi usarla comunque?`,
+        "Usa cartella esistente",
+        "Annulla"
+      );
+
+      if (choice !== "Usa cartella esistente") {
+        return undefined;
+      }
+    } else {
+      throw err;
+    }
+  }
+
+  return workingDir;
+}
+
 function getGlobalConfigPath(): string {
   const platform = process.platform;
   if (platform === 'win32') {
@@ -70,39 +135,61 @@ function zipFolder(source: string, out: string, rootFolderName: string): Promise
   });
 }
 
-async function extractZipDirectly(buffer: Buffer, destination: string) {
+async function extractZipToFolder(buffer: Buffer, destination: string): Promise<void> {
   const zip = new AdmZip(buffer);
   const entries = zip.getEntries();
 
-  // Determine the top-level folder name (skip __MACOSX)
-  const topLevelFolders = entries
-    .map(e => e.entryName.split(/\/|\\/)[0])
-    .filter(name => name && name !== '__MACOSX');
+  const validEntries = entries.filter(e => {
+    const name = e.entryName.replace(/\\/g, '/');
+    return name && !name.startsWith('__MACOSX/') && name !== '__MACOSX';
+  });
 
-  // Pick the most common top-level folder
-  const topFolder = topLevelFolders[0]; // assume first one
+  if (validEntries.length === 0) {
+    return;
+  }
 
-  for (const entry of entries) {
-    if (entry.isDirectory) continue; // skip directories
-    if (entry.entryName.startsWith('__MACOSX')) continue; // skip macOS metadata
+  const firstSegments = validEntries
+    .map(e => e.entryName.replace(/\\/g, '/'))
+    .map(name => name.split('/').filter(Boolean)[0])
+    .filter(Boolean);
 
-    // Remove the top-level folder
-    const relativePath = entry.entryName.startsWith(topFolder + '/')
-      ? entry.entryName.substring(topFolder.length + 1)
-      : entry.entryName;
+  const uniqueFirstSegments = [...new Set(firstSegments)];
+  const commonRoot = uniqueFirstSegments.length === 1 ? uniqueFirstSegments[0] : null;
 
-    if (!relativePath) continue; // skip empty names
+  for (const entry of validEntries) {
+    if (entry.isDirectory) {
+      continue;
+    }
 
-    const targetPath = path.join(destination, relativePath);
+    const normalizedEntryName = entry.entryName.replace(/\\/g, '/');
+    let relativePath = normalizedEntryName;
 
-    // Ensure parent dir exists
+    // Se tutto lo zip è contenuto in una sola cartella radice, la rimuove
+    if (commonRoot && relativePath.startsWith(commonRoot + '/')) {
+      relativePath = relativePath.slice(commonRoot.length + 1);
+    }
+
+    relativePath = relativePath.replace(/^\/+/, '');
+
+    if (!relativePath) {
+      continue;
+    }
+
+    // Protezione zip-slip
+    const targetPath = path.resolve(destination, relativePath);
+    const destinationResolved = path.resolve(destination);
+
+    if (
+      targetPath !== destinationResolved &&
+      !targetPath.startsWith(destinationResolved + path.sep)
+    ) {
+      throw new Error(`Percorso non valido nello ZIP: ${entry.entryName}`);
+    }
+
     await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
-
-    // Write the file
     await fs.promises.writeFile(targetPath, entry.getData());
   }
 }
-
 
 /* -------------------- Tree Items -------------------- */
 
@@ -336,87 +423,96 @@ export function activate(context: vscode.ExtensionContext) {
   /* ---------- Download Command (with dropdown list) ---------- */
 
   context.subscriptions.push(vscode.commands.registerCommand('sce-unina.getExam', async () => {
+  const baseUrl = await getServerUrl();
 
-    const baseUrl = await getServerUrl();
+  try {
+    // 1. Recupera lista file dal server
+    const listResponse = await fetchWithTimeout(`${baseUrl}/list_exams`, {}, 5000);
 
-    try {
-      // 1. Ask server for available exams
-      const listResponse = await fetchWithTimeout(`${baseUrl}/list_exams`, {}, 5000);
-
-      if (!listResponse.ok) {
-        return vscode.window.showErrorMessage("Errore nel recupero lista file dal server.");
-      }
-
-      const files: string[] = await listResponse.json();
-
-      if (!files || files.length === 0) {
-        return vscode.window.showWarningMessage("Nessun file di esame disponibile.");
-      }
-
-      // 2. Show dropdown
-      const selectedFile = await vscode.window.showQuickPick(files, {
-        placeHolder: "Seleziona il file di esame da scaricare"
-      });
-
-      if (!selectedFile) {
-        return vscode.window.showInformationMessage("Download annullato.");
-      }
-
-      // 3. Choose destination folder
-      const folderUri = await vscode.window.showOpenDialog({
-        canSelectFolders: true,
-        canSelectFiles: false,
-        canSelectMany: false,
-        openLabel: "Seleziona cartella di destinazione"
-      });
-
-      if (!folderUri) return;
-
-      const saveFolder = folderUri[0].fsPath;
-      const savePath = path.join(saveFolder, selectedFile);
-
-      vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: `Scaricamento ${selectedFile}...` },
-        async () => {
-
-          const response = await fetchWithTimeout(
-            `${baseUrl}/get_exam/${encodeURIComponent(selectedFile)}`,
-            {},
-            30000
-          );
-
-          if (!response.ok) {
-            return vscode.window.showErrorMessage("Errore durante il download del file.");
-          }
-
-          const buffer = Buffer.from(await response.arrayBuffer());
-          const ext = path.extname(selectedFile).toLowerCase();
-
-          if (ext === ".zip") {
-            //const zip = new AdmZip(buffer);
-            await extractZipDirectly(buffer, saveFolder);
-            //zip.extractAllTo(saveFolder, true);
-
-            vscode.window.showInformationMessage(`Archivio estratto in ${saveFolder}`);
-          } else {
-            await fs.promises.writeFile(savePath, buffer);
-            vscode.window.showInformationMessage(`File salvato in ${savePath}`);
-          }
-        }
-      );
-
-      await vscode.commands.executeCommand(
-        'vscode.openFolder',
-        vscode.Uri.file(saveFolder),
-        false   // false = open in same window, true = new window
-      );
-
-      
-
-    } catch (err: any) {
-      vscode.window.showErrorMessage("Errore di connessione al server: " + err.message);
+    if (!listResponse.ok) {
+      return vscode.window.showErrorMessage("Errore nel recupero lista file dal server.");
     }
-  }));
+
+    const files: string[] = await listResponse.json();
+
+    if (!Array.isArray(files) || files.length === 0) {
+      return vscode.window.showWarningMessage("Nessun file di esame disponibile.");
+    }
+
+    // 2. Selezione file
+    const selectedFile = await vscode.window.showQuickPick(files, {
+      placeHolder: "Seleziona il file di esame da scaricare"
+    });
+
+    if (!selectedFile) {
+      return vscode.window.showInformationMessage("Download annullato.");
+    }
+
+    // 3. Selezione cartella padre (che sarà anche la working directory)
+    const folderUri = await vscode.window.showOpenDialog({
+      canSelectFolders: true,
+      canSelectFiles: false,
+      canSelectMany: false,
+      openLabel: "Seleziona la cartella di lavoro"
+    });
+
+    if (!folderUri || folderUri.length === 0) {
+      return vscode.window.showInformationMessage("Operazione annullata.");
+    }
+
+    const workingDir = folderUri[0].fsPath;
+
+    // 4. Download ed estrazione/salvataggio nella cartella scelta
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Scaricamento ${selectedFile}...`
+      },
+      async (progress) => {
+        progress.report({ message: "Download in corso..." });
+
+        const response = await fetchWithTimeout(
+          `${baseUrl}/get_exam/${encodeURIComponent(selectedFile)}`,
+          {},
+          30000
+        );
+
+        if (!response.ok) {
+          throw new Error("Errore durante il download del file.");
+        }
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const ext = path.extname(selectedFile).toLowerCase();
+
+        if (ext === ".zip") {
+          progress.report({ message: "Estrazione archivio..." });
+          await extractZipToFolder(buffer, workingDir);
+
+          vscode.window.showInformationMessage(
+            `Archivio estratto in: ${workingDir}`
+          );
+        } else {
+          const savePath = path.join(workingDir, selectedFile);
+          await fs.promises.writeFile(savePath, buffer);
+
+          vscode.window.showInformationMessage(
+            `File salvato in: ${savePath}`
+          );
+        }
+      }
+    );
+
+    // 5. Porta il focus direttamente su questa cartella aprendola come workspace
+    await vscode.commands.executeCommand(
+      'vscode.openFolder',
+      vscode.Uri.file(workingDir),
+      false
+    );
+
+  } catch (err: any) {
+    vscode.window.showErrorMessage("Errore: " + err.message);
+  }
+}));
 
   
   /* ---------- Configure Server ---------- */
